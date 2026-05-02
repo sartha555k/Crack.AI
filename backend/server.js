@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import cors from 'cors';
 import { Server } from 'socket.io';
-// import connectDB from './config/db.js';
+import connectDB from './config/db.js';
 // import userRoutes from './routes/userRoutes.js';
 // import sessionRoutes from './routes/sessionRoutes.js';
 // import { notFound, errorHandler } from './middleware/errorMiddleware.js';
@@ -15,7 +15,7 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// connectDB();
+connectDB();
 
 const allowedOrigins = [
     'http://localhost:5174',

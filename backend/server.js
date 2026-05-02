@@ -10,7 +10,7 @@ import { Server } from 'socket.io';
 
 
 dotenv.config();
-// hello 
+// hello world
 
 const app = express();
 const server = http.createServer(app);

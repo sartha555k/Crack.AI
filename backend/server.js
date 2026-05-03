@@ -6,7 +6,7 @@ import { Server } from 'socket.io';
 import connectDB from './config/db.js';
 // import userRoutes from './routes/userRoutes.js';
 // import sessionRoutes from './routes/sessionRoutes.js';
-// import { notFound, errorHandler } from './middleware/errorMiddleware.js';
+import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
 
 dotenv.config();
@@ -63,8 +63,8 @@ io.on('connection', (socket) => {
 
 });
 
-// app.use(notFound);
-// app.use(errorHandler);
+app.use(notFound);
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT,

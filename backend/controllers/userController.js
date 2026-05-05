@@ -1,9 +1,8 @@
 import asynchandler from 'express-async-handler';
-import User from '../models/userModel.js';
+import User from '../models/User.js';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { use } from 'react';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -94,7 +93,7 @@ const googleLogin = asynchandler(async (req, res) => {
     }
 })
 
-const userProfile = asynchandler(async (req, res) => {
+const getUserProfile = asynchandler(async (req, res) => {
     if (req.user) {
         res.json({
             _id: req.user._id,
@@ -133,4 +132,4 @@ const updateUserProfile = asynchandler(async (req, res) => {
     }
 })
 
-export { loginUser, googleLogin, userProfile, updateUserProfile }
+export { loginUser, googleLogin, getUserProfile, updateUserProfile }

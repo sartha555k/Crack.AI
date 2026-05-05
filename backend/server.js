@@ -4,7 +4,7 @@ import http from 'http';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import connectDB from './config/db.js';
-// import userRoutes from './routes/userRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 // import sessionRoutes from './routes/sessionRoutes.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
@@ -46,7 +46,7 @@ app.set('io', io);
 app.get('/', (req, res) => {
     res.send('API is running');
 })
-// app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);
 // app.use('/api/sessions', sessionRoutes);
 
 

@@ -111,6 +111,43 @@ const deleteSession = asynchandler(async (req, res) => {
     res.status(200).json({ id: req.params.id });
 })
 
+
+const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionIdx, audioFilePath, codeSubmission) => {
+    const processingStart = Date.now();
+    const transcription = "";
+    const questionIdx = typeof questionIdx === 'string' ? parseInt(questionIdx, 10) : questionIdx;
+    const session = await Session.findById(sessionId);
+    if (!session) {
+        console.error(`Session ${sessionId} not found`);
+        return;
+    }
+    const question = session.questions[questionIdx];
+    if (!question) {
+        pushSocketUpdate(io, userId, sessionId, 'EVALUATION_FAILED', `Question index ${questionIdx + 1} is out of bounds.`);
+    }
+    // this is for the audio section only !!!
+    if (audioFilePath) {
+        try {
+            pushSocketUpdate(io, userId, sessionId, 'AI_TRANSCRIBING', `Transcribing audio for Q${questionIdx + 1}...`)
+            const formData = new FormData();
+            formData.append('file', fs.createReadStream(audioFilePath))
+            const transResponse = await fetch(`${AI_SERVICE_URL}/transcribe`, {
+                method: 'POST',
+                body: formData,
+                headers: formData.getHeaders()
+            })
+            if (!transResponse.ok) throw new Error('Transcription service failed');
+            const transData = await transResponse.json();
+            transcription = transData.transcription || "";
+        } catch (error) {
+            console.error(`Transcription Error: ${error.message}`);
+        } finally {
+            if (audioFilePath && fs.existsSync(audioFilePath)) fs.unlinkSync(audioFilePath);
+        }
+    }
+
+})
+
 const submitAnswer = asynchandler(async (req, res) => {
     const sessionId = req.params.id;
     const { questionIndex, code, violations } = req.body;
@@ -147,7 +184,7 @@ const submitAnswer = asynchandler(async (req, res) => {
         session
     });
     const io = req.app.get('io');
-    evaluateAnswerAsync(io, userId, session, questionIdx, audioFilePath, codeSubmission);
+    evaluateAnswerAsync(io, userId, sessionId, questionIdx, audioFilePath, codeSubmission);
 })
 
 

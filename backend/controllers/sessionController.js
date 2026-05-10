@@ -146,7 +146,185 @@ const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionI
         }
     }
 
+    // for the ai check !!
+    try {
+        pushSocketUpdate(io, userId, sessionId, 'AI_EVALUATION', `AI is analyzing Q${questionIdx + 1}...`)
+        const evalResponse = await fetch(`${AI_SERVICE_URL}/evaluate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                question: question.questionText,
+                question_type: question.questionType,
+                role: session.role,
+                level: session.level,
+                user_answer: transcription,
+                user_code: code || "",
+            }),
+        });
+        if (!evalResponse.ok) {
+            throw new Error('AI Evaluation Service Failed !')
+        }
+        const evalData = await evalResponse.json();
+        question.userAnswerText = transcription;
+        question.userSubmittedCode = code || "";
+
+        question.technicalScore = evalData.technicalScore;
+        question.confidenceScore = evalData.confidenceScore;
+        question.aiFeedback = evalData.aiFeedback;
+        question.idealAnswer = evalData.idealAnswer;
+        question.isEvaluated = true;
+        if (session.status === 'completed') {
+            const scoreSummary = await calculateOverallScore(sessionId);
+            session.overallScore = scoreSummary.overallScore || 0;
+            session.metrics = {
+                avgTechnical: scoreSummary.avgTechnical,
+                avgConfidence: scoreSummary.avgConfidence,
+            }
+            await session.save();
+            pushSocketUpdate(io, userId, sessionId, 'SESSION_COMPLETED', 'Scores finalized.', session);
+        } else {
+            const timeElapsed = (new Date() - new Date(session.startTime)) / 60000;
+            if (timeElapsed >= session.duration) {
+                const scoreSummary = await calculateOverallScore(sessionId);
+                session.overallScore = scoreSummary.overallScore || 0;
+                session.metrics = { avgTechnical: scoreSummary.avgTechnical, avgConfidence: scoreSummary.avgConfidence };
+                session.status = 'completed';
+                session.endTime = new Date();
+                await session.save();
+                pushSocketUpdate(io, userId, sessionId, 'SESSION_COMPLETED', 'Time is up. Scores finalized.', session);
+            }
+            else {
+                pushSocketUpdate(io, userId, sessionId, 'AI_GENERATING_QUESTIONS', 'Generating next adaptive question...');
+                try {
+                    const nextQResponse = await fetch(`${AI_SERVICE_URL}/generate-next-question`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            role: session.role,
+                            level: session.level,
+                            interview_type: session.interviewType,
+                            previous_question: question.questionText,
+                            user_answer: question.userAnswerText,
+                            user_code: question.userSubmittedCode,
+                            ai_feedback: question.aiFeedback
+                        }),
+                    });
+
+                    if (nextQResponse.ok) {
+                        const nextQData = await nextQResponse.json();
+                        session.questions.push({
+                            questionText: nextQData.question,
+                            questionType: nextQData.questionType || 'oral',
+                            isEvaluated: false,
+                            isSubmitted: false,
+                        });
+                    }
+                } catch (e) {
+                    console.error("Failed to generate next question:", e);
+                }
+                if (session.lastPauseStart) {
+                    const processingDuration = Date.now() - new Date(session.lastPauseStart).getTime();
+                    session.pauseTimeMS = (session.pauseTimeMS || 0) + processingDuration;
+                }
+                session.isPaused = false;
+
+                await session.save();
+                pushSocketUpdate(io, userId, sessionId, 'NEW_QUESTION', `Feedback ready and new question available.`, session);
+            }
+        }
+
+    } catch (error) {
+        console.error(`Evaluation Error: ${error.message}`);
+        session.isPaused = false;
+        await session.save();
+        pushSocketUpdate(io, userId, sessionId, 'EVALUATION_FAILED', `Evaluation failed.`, session);
+    }
+
 })
+
+const calculateOverallScore = async (sessionId) => {
+    const results = await Session.aggregate([
+        { $match: { _id: new mongoose.Types.ObjectId(sessionId) } },
+        { $unwind: '$questions' },
+        {
+            $group: {
+                _id: '$_id',
+                avgTechnical: {
+                    $avg: { $cond: [{ $eq: ['$questions.isEvaluated', true] }, '$questions.technicalScore', 0] }
+                },
+                avgConfidence: {
+                    $avg: { $cond: [{ $eq: ['$questions.isEvaluated', true] }, '$questions.confidenceScore', 0] }
+                }
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                overallScore: { $round: [{ $avg: ['$avgTechnical', '$avgConfidence'] }, 0] },
+                avgTechnical: { $round: ['$avgTechnical', 0] },
+                avgConfidence: { $round: ['$avgConfidence', 0] },
+            }
+        }
+    ])
+    const finalResult = results[0] || { overallScore: 0, avgTechnical: 0, avgConfidence: 0 };
+    const session = await Session.findById(sessionId); // Violation penalty 
+    if (session && session.violations > 0) {
+        const deductionPercent = Math.min(session.violations * 5, 80);
+        const factor = (100 - deductionPercent) / 100;
+        finalResult.overallScore = Math.round(finalResult.overallScore * factor);
+    }
+    return finalResult;
+};
+
+const endSession = asynchandler(async (req, res) => {
+    const sessionId = req.params.id;
+    const userId = req.user._id;
+    const session = await Session.findById(sessionId);
+    if (!session || session.user.toString() !== userId.toString()) {
+        res.status(404);
+        throw new Error('Session not found or user unauthorized.');
+    }
+    const isProcessing = session.questions.some(q => q.isSubmitted && !q.isEvaluated)
+    if (session.status === 'completed') {
+        res.status(400);
+        throw new Error('Session is already completed.');
+    }
+    const scoreSummary = await calculateOverallScore(sessionId);
+
+    session.overallScore = scoreSummary.overallScore || 0;
+    session.status = 'completed';
+    session.endTime = new Date();
+    session.metrics = {
+        avgTechnical: scoreSummary.avgTechnical,
+        avgConfidence: scoreSummary.avgConfidence,
+    };
+
+    await session.save();
+
+    const io = req.app.get('io');
+    pushSocketUpdate(io, userId, sessionId, 'SESSION_COMPLETED', 'Interview session ended early.', session);
+
+    res.json({ message: 'Session ended successfully.', session });
+})
+
+const startSession = asynchandler(async (req, res) => {
+    const session = await Session.findById(req.params.id);
+
+    if (!session || session.user.toString() !== req.user._id.toString()) {
+        res.status(404);
+        throw new Error('Session not found or user unauthorized.');
+    }
+
+    // Only set startTime once
+    if (!session.startTime) {
+        session.startTime = new Date();
+        session.status = 'in-progress';
+        await session.save();
+    }
+
+    res.json(session);
+})
+
 
 const submitAnswer = asynchandler(async (req, res) => {
     const sessionId = req.params.id;
@@ -188,4 +366,13 @@ const submitAnswer = asynchandler(async (req, res) => {
 })
 
 
-export { createSession };
+export {
+    createSession,
+    getSessionById,
+    getSessions,
+    submitAnswer,
+    endSession,
+    calculateOverallScore,
+    deleteSession,
+    startSession
+};

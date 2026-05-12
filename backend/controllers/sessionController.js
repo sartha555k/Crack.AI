@@ -1,5 +1,5 @@
 import asynchandler from 'express-async-handler';
-import Session from '../models/Session.js';
+import Session from '../models/SessionModel.js';
 import fetch from 'node-fetch';
 import fs from 'fs';
 import FormData from 'form-data';
@@ -18,7 +18,7 @@ const pushSocketUpdate = (io, userId, sessionId, status, message, session = null
 };
 
 
-export const createSession = asynchandler(async (req, res) => {
+const createSession = asynchandler(async (req, res) => {
     const { role, level, interviewType, duration } = req.body;
     const userId = req.user._id;
     if (!role || !level || !interviewType || !duration) {
@@ -112,10 +112,10 @@ const deleteSession = asynchandler(async (req, res) => {
 })
 
 
-const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionIdx, audioFilePath, codeSubmission) => {
+const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionIndex, audioFilePath, codeSubmission) => {
     const processingStart = Date.now();
     const transcription = "";
-    const questionIdx = typeof questionIdx === 'string' ? parseInt(questionIdx, 10) : questionIdx;
+    const questionIdx = typeof questionIndex === 'string' ? parseInt(questionIndex, 10) : questionIndex;
     const session = await Session.findById(sessionId);
     if (!session) {
         console.error(`Session ${sessionId} not found`);

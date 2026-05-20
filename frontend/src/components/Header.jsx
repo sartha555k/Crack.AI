@@ -19,7 +19,7 @@ const Header = () => {
   const isActive = (path) => location.pathname === path;
 
   return (
-    <header className="bg-slate-900/95 backdrop-blur-md text-white shadow-2xl sticky top-0 z-50 border-b border-slate-700/50 py-2">
+    <header className="bg-blue-300 backdrop-blur-md text-white shadow-2xl sticky top-0 z-50 border-b border-slate-700/50 py-2">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items center">
         <Link to="/" className="flex items-center space-x-2 group shrink-0">
           <div className="bg-teal-500 p-1.5 rounded-lg group-hover:rotate-12 transition-transform duration-300">
@@ -37,8 +37,8 @@ const Header = () => {
               />
             </svg>
           </div>
-          <span className=" text-lg sm:text-xl font-black tracking-tighter uppercase text-white group-hover:text-teal-400 transition-colors">
-            <span className="text-teal-500">Crack</span>
+          <span className=" text-lg sm:text-xl font-black tracking-tighter uppercase text-white group-hover:text-red-600 transition-colors">
+            <span className="text-black">Crack</span>
             <span className="hidden sm:inline">.AI</span>
           </span>
         </Link>
@@ -47,13 +47,13 @@ const Header = () => {
             <>
               <Link
                 to="/"
-                className={`text-sm font-bold uppercase tracking-widest transition-all ${isActive("/") ? "text-teal-400 border-b-2 border-teal-500" : "text-slate-400 hover:text-white border-b-2 border-transparent"}`}
+                className={`text-sm font-bold uppercase tracking-widest transition-all ${isActive("/") ? "text-black border-b-2 border-red-600" : "text-slate-500 hover:text-white border-b-2 border-transparent"}`}
               >
                 Dashboard
               </Link>
               <Link
                 to="/profile"
-                className={`text-sm font-bold uppercase tracking-widest transition-all ${isActive("/profile") ? "text-teal-400 border-b-2 border-teal-500" : "text-slate-400 hover:text-white border-b-2 border-transparent"}`}
+                className={`text-sm font-bold uppercase tracking-widest transition-all ${isActive("/profile") ? "text-black border-b-2 border-red-600" : "text-slate-500 hover:text-white border-b-2 border-transparent"}`}
               >
                 Profile
               </Link>
@@ -74,13 +74,13 @@ const Header = () => {
             <div className="flex space-x-6">
               <Link
                 to="/login"
-                className={`text-sm font-bold uppercase tracking-widest transition-all ${isActive("/login") ? "text-teal-400 border-b-2 border-teal-500" : "text-slate-400 hover:text-white border-b-2 border-transparent"}`}
+                className={`text-sm font-bold uppercase tracking-widest transition-all ${isActive("/login") ? "text-black border-b-2 border-red-600" : "text-slate-500 hover:text-white border-b-2 border-transparent"}`}
               >
                 Login
               </Link>
               <Link
                 to="/register"
-                className={`text-sm font-bold uppercase tracking-widest transition-all ${isActive("/register") ? "text-teal-400 border-b-2 border-teal-500" : "text-slate-400 hover:text-white border-b-2 border-transparent"}`}
+                className={`text-sm font-bold uppercase tracking-widest transition-all ${isActive("/register") ? "text-black border-b-2 border-red-600" : "text-slate-500 hover:text-white border-b-2 border-transparent"}`}
               >
                 Register
               </Link>
@@ -131,14 +131,14 @@ const Header = () => {
                 <Link
                   to="/"
                   onClick={() => setIsMenuOpen(false)}
-                  className={`block py-4 text-xl font-black uppercase tracking-widest border-b border-slate-800 ${isActive("/") ? "text-teal-400" : "text-slate-400"}`}
+                  className={`block py-4 text-xl font-black uppercase tracking-widest border-b border-slate-800 ${isActive("/") ? "text-red-600" : "text-slate-500"}`}
                 >
                   Dashboard
                 </Link>
                 <Link
                   to="/profile"
                   onClick={() => setIsMenuOpen(false)}
-                  className={`block py-4 text-xl font-black uppercase tracking-widest border-b border-slate-800 ${isActive("/profile") ? "text-teal-400" : "text-slate-400"}`}
+                  className={`block py-4 text-xl font-black uppercase tracking-widest border-b border-slate-800 ${isActive("/profile") ? "text-red-600" : "text-slate-400"}`}
                 >
                   Profile
                 </Link>

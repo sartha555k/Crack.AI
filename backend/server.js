@@ -27,7 +27,7 @@ const io = new Server(server, {
         origin: allowedOrigins,
         methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         credentials: true,
-        allowedHeaders: { 'content-type': 'Authorization' },
+        allowedHeaders: ["Content-Type", "Authorization"],
     }
 })
 
@@ -35,7 +35,7 @@ app.use(cors({
     origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
-    allowedHeaders: { 'content-type': 'Authorization' },
+    allowedHeaders: ["Content-Type", "Authorization"],
 
 }))
 

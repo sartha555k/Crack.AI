@@ -78,7 +78,7 @@ async def root():
     return {"message":"Hello from AI Interviewer Microservice !","model":OLLAMA_MODEL_NAME}
 
 
-@app.post("/generate-question", response_model=QuestionResponse)
+@app.post("/generate-questions", response_model=QuestionResponse)
 async def generate_question(request: QuestionRequest):
 
     try:
@@ -178,7 +178,7 @@ async def generate_next_question(request:NextQuestionRequest):
             format="json",
             options={"temperature":0.7}
         )
-        next_q_data = json.load(response['response'].strip())
+        next_q_data = json.loads(response['response'].strip())
         return {"question": next_q_data.get('question', ""), "questionType": next_q_data.get('questionType', 'oral')}
     
     except Exception as e:

@@ -5,7 +5,7 @@ import fs from 'fs';
 import FormData from 'form-data';
 import path from 'path';
 import mongoose from 'mongoose';
-import { resolveSoa } from 'dns';
+
 const AI_SERVICE_URL = 'http://localhost:8000';
 
 const pushSocketUpdate = (io, userId, sessionId, status, message, session = null) => {
@@ -22,7 +22,7 @@ const createSession = asynchandler(async (req, res) => {
     const { role, level, interviewType, duration } = req.body;
     const userId = req.user._id;
     if (!role || !level || !interviewType || !duration) {
-        req.status(400);
+        res.status(400); // FIX: was req.status(400)
         throw new Error("Please fill all the fields");
     }
     let session = await Session.create({
@@ -32,70 +32,72 @@ const createSession = asynchandler(async (req, res) => {
         interviewType,
         duration,
         status: "pending"
-    })
+    });
+
     const io = req.app.get('io');
+
     res.status(201).json({
         message: "Session created successfully",
         sessionId: session._id,
         status: "processing"
-    })
-        (async () => {
-            try {
-                pushSocketUpdate(io, userId, session._id, 'Ai generating questoins', `Generating questions for ${role}`)
-                const aiResponse = await fetch(`${AI_SERVICE_URL}/generate-questions`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        role,
-                        level,
-                        count: 1,
-                        interview_type: interviewType
-                    })
+    }); // FIX: semicolon added — without it, the IIFE below was parsed as a call on .json()'s return value
+
+    (async () => {
+        try {
+            pushSocketUpdate(io, userId, session._id, 'Ai generating questions', `Generating questions for ${role}`);
+            const aiResponse = await fetch(`${AI_SERVICE_URL}/generate-questions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    role,
+                    level,
+                    count: 1,
+                    interview_type: interviewType
                 })
-                if (!aiResponse.ok) {
-                    const errorBody = await aiResponse.text();
-                    throw new Error(`AI Service error: ${aiResponse.status} - ${errorBody}`);
-                }
-
-                const aiData = await aiResponse.json();
-                const codingCount = interviewType === 'coding-mix' ? 1 : 0
-                const questionsArray = aiData.questions.map((qText, index) => ({
-                    questionText: qText,
-                    questionType: index < codingCount ? 'coding' : 'oral',
-                    isEvaluated: false,
-                    isSubmitted: false,
-                }));
-                session.questions = questionsArray;
-                session.status = 'in-progress';
-                await session.save();
-                pushSocketUpdate(io, userId, session._id, 'questions generated', 'Questions generated successfully start-session', session)
-
-            } catch (error) {
-                console.error(`Session Creation Failure for ${session._id}:`, error.message);
-                session.status = 'failed';
-                await session.save();
-                pushSocketUpdate(io, userId, session._id, 'GENERATION_FAILED', `Question generation failed. Reason: ${error.message}.`);
+            });
+            if (!aiResponse.ok) {
+                const errorBody = await aiResponse.text();
+                throw new Error(`AI Service error: ${aiResponse.status} - ${errorBody}`);
             }
-        })();
+
+            const aiData = await aiResponse.json();
+            const codingCount = interviewType === 'coding-mix' ? 1 : 0;
+            const questionsArray = aiData.questions.map((qText, index) => ({
+                questionText: qText,
+                questionType: index < codingCount ? 'coding' : 'oral',
+                isEvaluated: false,
+                isSubmitted: false,
+            }));
+            session.questions = questionsArray;
+            session.status = 'in-progress';
+            await session.save();
+            pushSocketUpdate(io, userId, session._id, 'questions generated', 'Questions generated successfully start-session', session);
+
+        } catch (error) {
+            console.error(`Session Creation Failure for ${session._id}:`, error.message);
+            session.status = 'failed';
+            await session.save();
+            pushSocketUpdate(io, userId, session._id, 'GENERATION_FAILED', `Question generation failed. Reason: ${error.message}.`);
+        }
+    })();
 });
 
 const getSessions = asynchandler(async (req, res) => {
     const session = await Session.find({ user: req.user._id })
         .sort({ createdAt: -1 })
-        .select('questions.userAnswerText -questions.userSubmittedCode')
+        .select('-questions.userSubmittedCode');
     res.json(session);
-})
+});
 
 const getSessionById = asynchandler(async (req, res) => {
-    const session = await Session.findOne({ _id: req.params.id, user: req.user._id })
+    const session = await Session.findOne({ _id: req.params.id, user: req.user._id });
     if (session) {
         res.json(session);
-    }
-    else {
+    } else {
         res.status(404);
         throw new Error("Session not found");
     }
-})
+});
 
 const deleteSession = asynchandler(async (req, res) => {
     const session = await Session.findById(req.params.id);
@@ -109,12 +111,12 @@ const deleteSession = asynchandler(async (req, res) => {
     }
     await session.deleteOne();
     res.status(200).json({ id: req.params.id });
-})
+});
 
 
-const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionIndex, audioFilePath, codeSubmission) => {
+const evaluateAnswerAsync = async (io, userId, sessionId, questionIndex, audioFilePath, codeSubmission) => {
     const processingStart = Date.now();
-    const transcription = "";
+    let transcription = ""; // FIX: was `const` — cannot reassign a const
     const questionIdx = typeof questionIndex === 'string' ? parseInt(questionIndex, 10) : questionIndex;
     const session = await Session.findById(sessionId);
     if (!session) {
@@ -124,18 +126,20 @@ const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionI
     const question = session.questions[questionIdx];
     if (!question) {
         pushSocketUpdate(io, userId, sessionId, 'EVALUATION_FAILED', `Question index ${questionIdx + 1} is out of bounds.`);
+        return;
     }
-    // this is for the audio section only !!!
+
+    // Audio transcription
     if (audioFilePath) {
         try {
-            pushSocketUpdate(io, userId, sessionId, 'AI_TRANSCRIBING', `Transcribing audio for Q${questionIdx + 1}...`)
+            pushSocketUpdate(io, userId, sessionId, 'AI_TRANSCRIBING', `Transcribing audio for Q${questionIdx + 1}...`);
             const formData = new FormData();
-            formData.append('file', fs.createReadStream(audioFilePath))
+            formData.append('file', fs.createReadStream(audioFilePath));
             const transResponse = await fetch(`${AI_SERVICE_URL}/transcribe`, {
                 method: 'POST',
                 body: formData,
                 headers: formData.getHeaders()
-            })
+            });
             if (!transResponse.ok) throw new Error('Transcription service failed');
             const transData = await transResponse.json();
             transcription = transData.transcription || "";
@@ -146,9 +150,9 @@ const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionI
         }
     }
 
-    // for the ai check !!
+    // AI evaluation
     try {
-        pushSocketUpdate(io, userId, sessionId, 'AI_EVALUATION', `AI is analyzing Q${questionIdx + 1}...`)
+        pushSocketUpdate(io, userId, sessionId, 'AI_EVALUATION', `AI is analyzing Q${questionIdx + 1}...`);
         const evalResponse = await fetch(`${AI_SERVICE_URL}/evaluate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -158,28 +162,29 @@ const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionI
                 role: session.role,
                 level: session.level,
                 user_answer: transcription,
-                user_code: code || "",
+                user_code: codeSubmission || "", // FIX: was `code` which was undefined
             }),
         });
         if (!evalResponse.ok) {
-            throw new Error('AI Evaluation Service Failed !')
+            throw new Error('AI Evaluation Service Failed!');
         }
         const evalData = await evalResponse.json();
         question.userAnswerText = transcription;
-        question.userSubmittedCode = code || "";
+        question.userSubmittedCode = codeSubmission || ""; // FIX: was `code` which was undefined
 
         question.technicalScore = evalData.technicalScore;
         question.confidenceScore = evalData.confidenceScore;
         question.aiFeedback = evalData.aiFeedback;
         question.idealAnswer = evalData.idealAnswer;
         question.isEvaluated = true;
+
         if (session.status === 'completed') {
             const scoreSummary = await calculateOverallScore(sessionId);
             session.overallScore = scoreSummary.overallScore || 0;
             session.metrics = {
                 avgTechnical: scoreSummary.avgTechnical,
                 avgConfidence: scoreSummary.avgConfidence,
-            }
+            };
             await session.save();
             pushSocketUpdate(io, userId, sessionId, 'SESSION_COMPLETED', 'Scores finalized.', session);
         } else {
@@ -192,8 +197,7 @@ const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionI
                 session.endTime = new Date();
                 await session.save();
                 pushSocketUpdate(io, userId, sessionId, 'SESSION_COMPLETED', 'Time is up. Scores finalized.', session);
-            }
-            else {
+            } else {
                 pushSocketUpdate(io, userId, sessionId, 'AI_GENERATING_QUESTIONS', 'Generating next adaptive question...');
                 try {
                     const nextQResponse = await fetch(`${AI_SERVICE_URL}/generate-next-question`, {
@@ -222,6 +226,7 @@ const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionI
                 } catch (e) {
                     console.error("Failed to generate next question:", e);
                 }
+
                 if (session.lastPauseStart) {
                     const processingDuration = Date.now() - new Date(session.lastPauseStart).getTime();
                     session.pauseTimeMS = (session.pauseTimeMS || 0) + processingDuration;
@@ -239,8 +244,7 @@ const evaluateAnswerAsync = asynchandler(async (io, userId, sessionId, questionI
         await session.save();
         pushSocketUpdate(io, userId, sessionId, 'EVALUATION_FAILED', `Evaluation failed.`, session);
     }
-
-})
+};
 
 const calculateOverallScore = async (sessionId) => {
     const results = await Session.aggregate([
@@ -265,9 +269,9 @@ const calculateOverallScore = async (sessionId) => {
                 avgConfidence: { $round: ['$avgConfidence', 0] },
             }
         }
-    ])
+    ]);
     const finalResult = results[0] || { overallScore: 0, avgTechnical: 0, avgConfidence: 0 };
-    const session = await Session.findById(sessionId); // Violation penalty 
+    const session = await Session.findById(sessionId);
     if (session && session.violations > 0) {
         const deductionPercent = Math.min(session.violations * 5, 80);
         const factor = (100 - deductionPercent) / 100;
@@ -284,7 +288,6 @@ const endSession = asynchandler(async (req, res) => {
         res.status(404);
         throw new Error('Session not found or user unauthorized.');
     }
-    const isProcessing = session.questions.some(q => q.isSubmitted && !q.isEvaluated)
     if (session.status === 'completed') {
         res.status(400);
         throw new Error('Session is already completed.');
@@ -305,7 +308,7 @@ const endSession = asynchandler(async (req, res) => {
     pushSocketUpdate(io, userId, sessionId, 'SESSION_COMPLETED', 'Interview session ended early.', session);
 
     res.json({ message: 'Session ended successfully.', session });
-})
+});
 
 const startSession = asynchandler(async (req, res) => {
     const session = await Session.findById(req.params.id);
@@ -315,7 +318,6 @@ const startSession = asynchandler(async (req, res) => {
         throw new Error('Session not found or user unauthorized.');
     }
 
-    // Only set startTime once
     if (!session.startTime) {
         session.startTime = new Date();
         session.status = 'in-progress';
@@ -323,7 +325,7 @@ const startSession = asynchandler(async (req, res) => {
     }
 
     res.json(session);
-})
+});
 
 
 const submitAnswer = asynchandler(async (req, res) => {
@@ -361,9 +363,10 @@ const submitAnswer = asynchandler(async (req, res) => {
         status: 'received',
         session
     });
+
     const io = req.app.get('io');
     evaluateAnswerAsync(io, userId, sessionId, questionIdx, audioFilePath, codeSubmission);
-})
+});
 
 
 export {

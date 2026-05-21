@@ -93,7 +93,6 @@ export const endSession = createAsyncThunk('sessions/endSession', async (session
     catch (error) {
         const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString();
         return thunkAPI.rejectWithValue(message);
-
     }
 })
 
@@ -121,20 +120,16 @@ export const sessionSlice = createSlice({
             const { sessionId, status, message, session } = action.payload;
             state.message = message;
 
-            if (status === 'QUESTIONS_READY' || status === 'GENERATION_FAILED') {
+            // FIX: was 'QUESTIONS_READY' — backend emits 'questions generated'
+            if (status === 'questions generated' || status === 'GENERATION_FAILED') {
                 state.isGenerating = false;
             }
 
-            if (session && state.activeSession && state.activeSession._id === sessionId) {
-                // Directly update the entire array to catch new adaptive questions
-                state.activeSession.questions = session.questions;
-                state.activeSession.overallScore = session.overallScore;
-                state.activeSession.status = session.status;
-                state.activeSession.metrics = session.metrics;
-                state.activeSession.violations = session.violations;
-                state.activeSession.isPaused = session.isPaused;
-                state.activeSession.lastPauseStart = session.lastPauseStart;
-                state.activeSession.pauseTimeMS = session.pauseTimeMS;
+            if (session) {
+                // FIX: update activeSession even if it was null (covers first socket update)
+                if (!state.activeSession || state.activeSession._id === sessionId) {
+                    state.activeSession = session;
+                }
             }
         },
         setActiveSession: (state, action) => {
@@ -143,7 +138,6 @@ export const sessionSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-
             .addCase(getSessions.pending, (state) => { state.isLoading = true; })
             .addCase(getSessions.fulfilled, (state, action) => {
                 state.isLoading = false;
@@ -154,8 +148,14 @@ export const sessionSlice = createSlice({
                 state.isError = true;
                 state.message = action.payload;
             })
-            .addCase(createSession.pending, (state) => { state.isLoading = true; state.isGenerating = true; state.activeSession = null; })
-            .addCase(createSession.fulfilled, (state) => { state.isLoading = false; })
+            .addCase(createSession.pending, (state) => {
+                state.isLoading = true;
+                state.isGenerating = true;
+                state.activeSession = null;
+            })
+            .addCase(createSession.fulfilled, (state) => {
+                state.isLoading = false;
+            })
             .addCase(createSession.rejected, (state, action) => {
                 state.isLoading = false;
                 state.isError = true;
@@ -172,17 +172,12 @@ export const sessionSlice = createSlice({
                 state.isLoading = false;
                 state.sessions = state.sessions.filter(s => s._id !== action.payload);
             })
-
-            .addCase(submitAnswer.pending, () => {
-            })
+            .addCase(submitAnswer.pending, () => { })
             .addCase(submitAnswer.fulfilled, (state, action) => {
                 state.isLoading = false;
-
-
                 if (action.payload?.session) {
                     state.activeSession = action.payload.session;
                 }
-
             })
             .addCase(submitAnswer.rejected, (state, action) => {
                 state.isError = true;

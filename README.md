@@ -89,7 +89,7 @@ Personalized user dashboard and settings.
 - Error handling for failed login attempts
 
 **Screenshot:**
-![Login Page](./screenshots/login.png)
+![Login Page](./screenshots/signin.png)
 
 ---
 
@@ -102,7 +102,7 @@ Personalized user dashboard and settings.
 - Link to login page
 
 **Screenshot:**
-![Register Page](./screenshots/register.png)
+![Register Page](./screenshots/signup.png)
 
 ---
 
@@ -130,7 +130,7 @@ Personalized user dashboard and settings.
 - Real-time feedback display
 
 **Screenshot:**
-![Interview Runner Page](./screenshots/interview-runner.png)
+![Interview Runner Page](./screenshots/interviewer.png)
 
 ---
 
@@ -144,7 +144,7 @@ Personalized user dashboard and settings.
 - Download report option
 
 **Screenshot:**
-![Session Review Page](./screenshots/session-review.png)
+![Session Review Page](./screenshots/analysis.png)
 
 ---
 
@@ -167,7 +167,7 @@ Personalized user dashboard and settings.
 - Navigation links to main pages
 
 **Screenshot:**
-![Not Found Page](./screenshots/not-found.png)
+![Not Found Page](./screenshots/notfound.png)
 
 ---
 
